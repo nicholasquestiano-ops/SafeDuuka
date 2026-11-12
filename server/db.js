@@ -1,18 +1,25 @@
 // SafeDuuka database layer. Creates all tables on first boot (zero manual setup).
 const { Pool } = require('pg');
 
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL is not set. Add it in Render -> Environment.');
+  process.exit(1);
+}
+
+const needsSsl = !/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || '')
-    ? false
-    : { rejectUnauthorized: false } // managed Postgres (e.g. Supabase) needs TLS
+  ssl: needsSsl ? { rejectUnauthorized: false } : false
 });
+
+pool.on('error', e => console.error('Database pool error:', e.message));
 
 const SCHEMA = `
 create table if not exists users(
   id serial primary key,
   role text not null check (role in ('owner','agent')),
-  phone text not null unique,           -- digits only, e.g. 0772123456
+  phone text not null unique,
   name text not null,
   pin_hash text not null,
   created_at timestamptz not null default now()
@@ -31,7 +38,7 @@ create table if not exists shops(
   target_bad int not null default 100000,
   target_avg int not null default 200000,
   target_good int not null default 300000,
-  paid_until timestamptz not null default now() + interval '7 days',  -- free trial
+  paid_until timestamptz not null default now() + interval '7 days',
   created_at timestamptz not null default now(),
   check (target_bad < target_avg and target_avg < target_good)
 );
