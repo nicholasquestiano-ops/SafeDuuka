@@ -229,4 +229,5 @@ app.use(express.static(FRONT));
 app.get('*', (req, res) => res.sendFile(path.join(FRONT, 'index.html')));
 
 init().then(() => app.listen(PORT, () => console.log(`SafeDuuka running on port ${PORT}`)))
-  .catch(e => { console.error('Database init failed:', e.message); process.exit(1); });
+    .catch(e => { console.error('Database init failed:', e.message, e.code || ''); process.exit(1); });
+
