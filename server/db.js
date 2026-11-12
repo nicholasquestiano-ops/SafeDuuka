@@ -1,32 +1,25 @@
 // SafeDuuka database layer. Creates all tables on first boot (zero manual setup).
 const { Pool } = require('pg');
 
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL is not set. Add it in Render -> Environment.');
-  process.exit(1);
-}
-
-const needsSsl = !/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL);
-
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: needsSsl ? { rejectUnauthorized: false } : false
+  ssl: /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || '')
+    ? false
+    : { rejectUnauthorized: false } // managed Postgres (e.g. Supabase) needs TLS
 });
 
-pool.on('error', e => console.error('Database pool error:', e.message));
-
 const SCHEMA = `
-create table if not exists users(
+create table if not exists sd_users(
   id serial primary key,
   role text not null check (role in ('owner','agent')),
-  phone text not null unique,
+  phone text not null unique,           -- digits only, e.g. 0772123456
   name text not null,
   pin_hash text not null,
   created_at timestamptz not null default now()
 );
-create table if not exists shops(
+create table if not exists sd_shops(
   id serial primary key,
-  owner_phone text not null unique references users(phone) on delete cascade,
+  owner_phone text not null unique references sd_users(phone) on delete cascade,
   agent_phone text,
   name text not null,
   owner_name text not null,
@@ -38,31 +31,31 @@ create table if not exists shops(
   target_bad int not null default 100000,
   target_avg int not null default 200000,
   target_good int not null default 300000,
-  paid_until timestamptz not null default now() + interval '7 days',
+  paid_until timestamptz not null default now() + interval '7 days',  -- free trial
   created_at timestamptz not null default now(),
   check (target_bad < target_avg and target_avg < target_good)
 );
-create table if not exists shop_state(
-  shop_id int primary key references shops(id) on delete cascade,
+create table if not exists sd_shop_state(
+  shop_id int primary key references sd_shops(id) on delete cascade,
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
-create table if not exists reset_codes(
+create table if not exists sd_reset_codes(
   phone text primary key,
   code_hash text not null,
   expires_at timestamptz not null,
   tries int not null default 0
 );
-create table if not exists support_requests(
+create table if not exists sd_support_requests(
   id serial primary key,
   phone text not null,
   note text,
   done boolean not null default false,
   created_at timestamptz not null default now()
 );
-create table if not exists payments(
+create table if not exists sd_payments(
   id serial primary key,
-  shop_id int not null references shops(id) on delete cascade,
+  shop_id int not null references sd_shops(id) on delete cascade,
   amount int not null,
   phone text,
   provider text not null default 'demo',
